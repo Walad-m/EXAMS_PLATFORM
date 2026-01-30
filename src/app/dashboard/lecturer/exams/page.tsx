@@ -1,11 +1,12 @@
 "use client";
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { supabase } from '@/lib/supabase/client';
 import { Plus, ArrowLeft, Trash2, Power, FileText, Loader2 } from 'lucide-react';
 
-export default function ExamsManagement() {
+// 1. Move the core logic here
+function ExamsManagementContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const level = searchParams.get('level');
@@ -127,7 +128,6 @@ export default function ExamsManagement() {
                     </td>
                     <td className="px-8 py-5">
                       <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-all">
-                        {/* View Results Action */}
                         <button 
                           onClick={() => router.push(`/dashboard/lecturer/results?level=${level}&examId=${exam.id}`)}
                           className="p-2 hover:bg-green-50 text-green-600 rounded-lg transition-colors"
@@ -136,7 +136,6 @@ export default function ExamsManagement() {
                           <FileText size={18} />
                         </button>
 
-                        {/* Toggle Status Action */}
                         <button 
                           onClick={() => toggleExamStatus(exam.id, exam.is_active)}
                           className={`p-2 rounded-lg transition-colors ${exam.is_active ? 'hover:bg-amber-50 text-amber-600' : 'hover:bg-blue-50 text-blue-600'}`}
@@ -145,7 +144,6 @@ export default function ExamsManagement() {
                           <Power size={18} />
                         </button>
 
-                        {/* Delete Action */}
                         <button 
                           onClick={() => handleDelete(exam.id, exam.title)}
                           className="p-2 hover:bg-red-50 text-red-500 rounded-lg transition-colors"
@@ -177,5 +175,18 @@ export default function ExamsManagement() {
         </div>
       </div>
     </DashboardLayout>
+  );
+}
+
+// 2. Wrap everything in a Suspense boundary for Vercel
+export default function ExamsManagement() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+        <Loader2 className="animate-spin text-blue-600" size={40} />
+      </div>
+    }>
+      <ExamsManagementContent />
+    </Suspense>
   );
 }

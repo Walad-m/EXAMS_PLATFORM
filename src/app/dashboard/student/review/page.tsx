@@ -1,11 +1,12 @@
 "use client";
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
 import DashboardLayout from '@/components/layout/DashboardLayout';
-import { CheckCircle2, XCircle, ArrowLeft, Info } from 'lucide-react';
+import { CheckCircle2, ArrowLeft, Info, Loader2 } from 'lucide-react';
 
-export default function ExamReviewPage() {
+// 1. Logic Component
+function ReviewContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const examId = searchParams.get('id');
@@ -18,7 +19,6 @@ export default function ExamReviewPage() {
     async function fetchReviewData() {
       if (!examId) return;
 
-      // 1. Fetch Exam Title
       const { data: exam } = await supabase
         .from('exams')
         .select('title')
@@ -27,7 +27,6 @@ export default function ExamReviewPage() {
       
       if (exam) setExamTitle(exam.title);
 
-      // 2. Fetch Questions (which include the correct_index)
       const { data: qs } = await supabase
         .from('questions')
         .select('*')
@@ -39,7 +38,14 @@ export default function ExamReviewPage() {
     fetchReviewData();
   }, [examId]);
 
-  if (loading) return <div className="p-10 text-center">Loading Corrections...</div>;
+  if (loading) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50">
+        <Loader2 className="animate-spin text-blue-600 mb-4" size={40} />
+        <p className="text-slate-500 font-bold animate-pulse">Loading Corrections...</p>
+      </div>
+    );
+  }
 
   return (
     <DashboardLayout role="Exam Review">
@@ -53,37 +59,39 @@ export default function ExamReviewPage() {
 
         <div className="mb-8">
           <h2 className="text-2xl font-bold text-slate-900">{examTitle}</h2>
-          <p className="text-slate-500">Review the correct answers for this examination.</p>
+          <p className="text-slate-500 font-medium">Review the correct answers for this examination.</p>
         </div>
 
         <div className="space-y-8">
           {questions.map((q, idx) => (
-            <div key={q.id} className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+            <div key={q.id} className="bg-white rounded-[2rem] border border-slate-200 shadow-sm overflow-hidden transition-all hover:shadow-md">
               <div className="p-6 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
-                <span className="font-bold text-slate-700">Question {idx + 1}</span>
-                <span className="text-xs font-bold text-slate-400">{q.marks_per_question} Mark(s)</span>
+                <span className="font-black text-slate-700 uppercase text-xs tracking-widest">Question {idx + 1}</span>
+                <span className="text-[10px] font-black text-blue-600 bg-blue-50 px-3 py-1 rounded-full uppercase italic">
+                  {q.marks_per_question} Mark(s)
+                </span>
               </div>
               
-              <div className="p-6">
-                <p className="text-lg text-slate-900 font-medium mb-6">{q.question_text}</p>
+              <div className="p-8">
+                <p className="text-lg text-slate-900 font-bold mb-8 leading-relaxed">{q.question_text}</p>
                 
-                <div className="grid grid-cols-1 gap-3">
+                <div className="grid grid-cols-1 gap-4">
                   {q.options.map((option: string, oIdx: number) => {
                     const isCorrect = oIdx === q.correct_index;
                     
                     return (
                       <div 
                         key={oIdx}
-                        className={`p-4 rounded-xl border-2 flex items-center justify-between transition-all ${
+                        className={`p-5 rounded-2xl border-2 flex items-center justify-between transition-all ${
                           isCorrect 
-                            ? 'border-green-500 bg-green-50 text-green-800' 
-                            : 'border-slate-100 bg-white text-slate-600'
+                            ? 'border-emerald-500 bg-emerald-50 text-emerald-900 shadow-sm' 
+                            : 'border-slate-100 bg-white text-slate-500 opacity-60'
                         }`}
                       >
-                        <span className="font-medium">{option}</span>
+                        <span className="font-bold">{option}</span>
                         {isCorrect && (
-                          <div className="flex items-center gap-2 text-xs font-bold uppercase">
-                            <CheckCircle2 size={18} /> Correct Answer
+                          <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-tighter">
+                            <CheckCircle2 size={18} className="text-emerald-600" /> Correct Choice
                           </div>
                         )}
                       </div>
@@ -95,13 +103,31 @@ export default function ExamReviewPage() {
           ))}
         </div>
 
-        <div className="mt-10 p-6 bg-blue-50 border border-blue-100 rounded-2xl flex gap-4">
-          <Info className="text-blue-600 shrink-0" />
-          <p className="text-sm text-blue-800 italic">
-            Note: This review is provided for academic growth. If you believe there is a marking error, please visit the Lecturer's office with your index number.
-          </p>
+        <div className="mt-12 p-8 bg-blue-600 text-white rounded-[2.5rem] shadow-xl shadow-blue-100 flex gap-6 items-center">
+          <div className="bg-white/20 p-3 rounded-2xl">
+            <Info size={24} />
+          </div>
+          <div>
+             <h4 className="font-black uppercase text-xs tracking-widest mb-1">Academic Integrity Note</h4>
+             <p className="text-sm font-medium text-blue-50 leading-relaxed">
+              This review is provided for academic growth. If you believe there is a marking error, please visit the Lecturer's office with your official index number.
+            </p>
+          </div>
         </div>
       </div>
     </DashboardLayout>
+  );
+}
+
+// 2. Main Page Export
+export default function ExamReviewPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+        <Loader2 className="animate-spin text-blue-600" size={40} />
+      </div>
+    }>
+      <ReviewContent />
+    </Suspense>
   );
 }
