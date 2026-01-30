@@ -4,6 +4,7 @@ import { Input } from '@/components/ui/Input';
 import { supabase } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { GraduationCap, Lock, ArrowRight, Loader2 } from 'lucide-react';
 
 export default function LoginPage() {
   const [identifier, setIdentifier] = useState(''); // Email or Index Number
@@ -17,23 +18,23 @@ export default function LoginPage() {
 
     let loginEmail = identifier;
 
-    // 1. Check if the user entered an Index Number instead of an Email
+    // 1. Handle Index Number Login
     if (!identifier.includes('@')) {
       const { data: profile, error: lookupError } = await supabase
         .from('profiles')
         .select('email')
-        .eq('index_number', identifier)
+        .eq('index_number', identifier.trim())
         .single();
 
       if (lookupError || !profile) {
-        alert("No account found with that Index Number.");
+        alert("Invalid Index Number. Please use your registered email or check your ID.");
         setLoading(false);
         return;
       }
       loginEmail = profile.email;
     }
 
-    // 2. Perform the actual login with the Email
+    // 2. Auth Execution
     const { data, error } = await supabase.auth.signInWithPassword({
       email: loginEmail,
       password,
@@ -42,7 +43,7 @@ export default function LoginPage() {
     if (error) {
       alert(error.message);
     } else {
-      // 3. Fetch role from profiles to redirect correctly
+      // 3. Smart Redirect based on Role
       const { data: profile } = await supabase
         .from('profiles')
         .select('role')
@@ -59,42 +60,73 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-50 px-4">
-      <div className="max-w-md w-full bg-white p-8 rounded-xl shadow-lg border border-slate-200">
-        <div className="text-center mb-8">
-          <h1 className="text-2xl font-bold text-slate-900">UDS Exam Portal</h1>
-          <p className="text-slate-500 text-sm">Sign in to your portal</p>
+    <div className="min-h-screen flex items-center justify-center bg-white px-4 relative overflow-hidden">
+      {/* Decorative background elements */}
+      <div className="absolute top-0 left-0 w-full h-1 bg-blue-600"></div>
+      <div className="absolute -top-24 -left-24 w-96 h-96 bg-blue-50 rounded-full blur-3xl opacity-50"></div>
+
+      <div className="max-w-md w-full relative z-10">
+        <div className="text-center mb-10">
+          <div className="inline-flex items-center justify-center w-16 h-16 bg-slate-900 text-white rounded-2xl shadow-xl mb-6">
+            <GraduationCap size={32} />
+          </div>
+          <h1 className="text-3xl font-black text-slate-900 tracking-tight">Welcome Back</h1>
+          <p className="text-slate-500 font-medium mt-2">UDS Academic Management Portal</p>
         </div>
 
-        <form onSubmit={handleLogin} className="space-y-4">
-          <Input 
-            label="Email or Index Number" 
-            placeholder="UDS/TCH/XX/XXXX or Email" 
-            value={identifier}
-            onChange={(e) => setIdentifier(e.target.value)}
-            required 
-          />
-          <Input 
-            label="Password" 
-            type="password" 
-            placeholder="••••••••" 
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required 
-          />
+        <div className="bg-white p-8 rounded-[2rem] shadow-2xl shadow-slate-200 border border-slate-100">
+          <form onSubmit={handleLogin} className="space-y-5">
+            <Input 
+              label="Student ID or Email" 
+              placeholder="Index Number or @uds.edu.gh" 
+              value={identifier}
+              onChange={(e) => setIdentifier(e.target.value)}
+              required 
+              className="rounded-xl"
+            />
+            
+            <div className="space-y-1">
+              <div className="flex justify-between items-center px-1">
+                <label className="text-sm font-bold text-slate-700">Password</label>
+                <Link href="#" className="text-[11px] font-bold text-blue-600 uppercase tracking-wider hover:text-blue-700">Forgot?</Link>
+              </div>
+              <Input 
+                label="Password"
+                type="password" 
+                placeholder="••••••••" 
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required 
+                className="rounded-xl"
+              />
+            </div>
 
-          <button 
-            disabled={loading}
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 rounded-md mt-4 transition-all disabled:opacity-50"
-          >
-            {loading ? 'Authenticating...' : 'Login'}
-          </button>
-        </form>
+            <button 
+              disabled={loading}
+              className="w-full bg-slate-900 hover:bg-blue-600 text-white font-bold py-4 rounded-xl mt-4 transition-all flex items-center justify-center gap-2 group disabled:opacity-50"
+            >
+              {loading ? (
+                <Loader2 className="animate-spin" size={20} />
+              ) : (
+                <>Sign In <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" /></>
+              )}
+            </button>
+          </form>
 
-        <div className="mt-6 text-center text-sm">
-          <p className="text-slate-600">
-            Don't have an account? <Link href="/register" className="text-blue-600 font-medium hover:underline">Register here</Link>
-          </p>
+          <div className="mt-8 pt-6 border-t border-slate-50 text-center">
+            <p className="text-slate-500 text-sm font-medium">
+              New to the portal?{" "}
+              <Link href="/register" className="text-blue-600 font-bold hover:text-blue-700 transition-colors">
+                Register Student Account
+              </Link>
+            </p>
+          </div>
+        </div>
+
+        {/* Security Badge */}
+        <div className="mt-8 flex items-center justify-center gap-2 text-slate-400">
+          <Lock size={14} />
+          <span className="text-[10px] font-black uppercase tracking-[0.2em]">Secure Kiosk Environment</span>
         </div>
       </div>
     </div>

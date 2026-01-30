@@ -1,11 +1,12 @@
 "use client";
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { supabase } from '@/lib/supabase/client';
 import { ArrowLeft, FileSpreadsheet, Search, Loader2, BarChart3, TrendingUp, Users } from 'lucide-react';
 
-export default function ResultsPage() {
+// 1. This component holds all your original logic
+function ResultsContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const level = searchParams.get('level');
@@ -49,7 +50,6 @@ export default function ResultsPage() {
     fetchResults();
   }, [level]);
 
-  // Statistics Calculations
   const totalSubmissions = results.length;
   const passCount = results.filter(r => r.score >= 12.5).length;
   const passRate = totalSubmissions > 0 ? ((passCount / totalSubmissions) * 100).toFixed(1) : 0;
@@ -66,20 +66,13 @@ export default function ResultsPage() {
     );
   });
 
-  // EXCEL (CSV) EXPORT - INDEX & SCORE ONLY
   const exportToExcel = () => {
     const headers = ["Index Number", "Score"];
-    
     const rows = filteredResults.map(res => [
       res.profiles?.index_number || "N/A",
       res.score
     ]);
-
-    const csvContent = [
-      headers.join(","), 
-      ...rows.map(row => row.join(","))
-    ].join("\n");
-
+    const csvContent = [headers.join(","), ...rows.map(row => row.join(","))].join("\n");
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
@@ -109,12 +102,9 @@ export default function ResultsPage() {
           </button>
         </div>
 
-        {/* Analytics Cards - FIXED COLORS FOR VISIBILITY */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
           <div className="bg-blue-600 p-6 rounded-3xl shadow-md flex items-center gap-4 border border-blue-500">
-            <div className="bg-white/20 p-4 rounded-2xl text-white">
-              <Users size={24} />
-            </div>
+            <div className="bg-white/20 p-4 rounded-2xl text-white"><Users size={24} /></div>
             <div>
               <p className="text-[10px] font-black text-blue-100 uppercase tracking-widest">Submissions</p>
               <p className="text-3xl font-black text-white">{totalSubmissions}</p>
@@ -122,9 +112,7 @@ export default function ResultsPage() {
           </div>
 
           <div className="bg-emerald-600 p-6 rounded-3xl shadow-md flex items-center gap-4 border border-emerald-500">
-            <div className="bg-white/20 p-4 rounded-2xl text-white">
-              <TrendingUp size={24} />
-            </div>
+            <div className="bg-white/20 p-4 rounded-2xl text-white"><TrendingUp size={24} /></div>
             <div>
               <p className="text-[10px] font-black text-emerald-100 uppercase tracking-widest">Pass Rate</p>
               <p className="text-3xl font-black text-white">{passRate}%</p>
@@ -132,9 +120,7 @@ export default function ResultsPage() {
           </div>
 
           <div className="bg-indigo-600 p-6 rounded-3xl shadow-md flex items-center gap-4 border border-indigo-500">
-            <div className="bg-white/20 p-4 rounded-2xl text-white">
-              <BarChart3 size={24} />
-            </div>
+            <div className="bg-white/20 p-4 rounded-2xl text-white"><BarChart3 size={24} /></div>
             <div>
               <p className="text-[10px] font-black text-indigo-100 uppercase tracking-widest">Avg Score</p>
               <p className="text-3xl font-black text-white">{classAverage}<span className="text-indigo-200 text-lg">/25</span></p>
@@ -142,7 +128,6 @@ export default function ResultsPage() {
           </div>
         </div>
 
-        {/* Results Table Card */}
         <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
           <div className="p-8 border-b border-slate-100 flex flex-col md:flex-row justify-between items-center bg-slate-50/50 gap-4">
             <div>
@@ -207,5 +192,18 @@ export default function ResultsPage() {
         </div>
       </div>
     </DashboardLayout>
+  );
+}
+
+// 2. This is the main exported component that includes the Suspense wrapper
+export default function ResultsPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+        <Loader2 className="animate-spin text-blue-600" size={40} />
+      </div>
+    }>
+      <ResultsContent />
+    </Suspense>
   );
 }
