@@ -1,10 +1,11 @@
 "use client";
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
-import { AlertTriangle, Clock, Loader2, CheckCircle } from 'lucide-react';
+import { AlertTriangle, Clock, Loader2 } from 'lucide-react';
 
-export default function KioskPage() {
+// 1. Separate the logic into a content component
+function KioskContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const examId = searchParams.get('id');
@@ -17,7 +18,7 @@ export default function KioskPage() {
   const [timeLeft, setTimeLeft] = useState(0); 
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // 1. Fetch Exam Data & Questions
+  // Load Exam Data
   useEffect(() => {
     async function loadExam() {
       if (!examId) return;
@@ -27,14 +28,14 @@ export default function KioskPage() {
 
       if (exam && qs) {
         setQuestions(qs);
-        setTimeLeft(exam.duration_minutes * 60); // Convert mins to seconds
+        setTimeLeft(exam.duration_minutes * 60);
       }
       setLoading(false);
     }
     loadExam();
   }, [examId]);
 
-  // 2. Auto-Submit Logic
+  // Handle Submission
   const handleSubmit = useCallback(async () => {
     if (isSubmitting) return;
     setIsSubmitting(true);
@@ -42,7 +43,6 @@ export default function KioskPage() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
-    // Calculate score: Compare student index with correct_index
     let totalScore = 0;
     questions.forEach((q) => {
       if (answers[q.id] === q.correct_index) {
@@ -64,10 +64,10 @@ export default function KioskPage() {
     setIsSubmitting(false);
   }, [answers, examId, questions, router, isSubmitting]);
 
-  // 3. Timer Effect
+  // Timer Hook
   useEffect(() => {
     if (!isFullScreen || timeLeft <= 0) {
-      if (isFullScreen && timeLeft === 0) handleSubmit(); // Auto-submit on timeout
+      if (isFullScreen && timeLeft === 0) handleSubmit();
       return;
     }
     const timer = setInterval(() => setTimeLeft(prev => prev - 1), 1000);
@@ -87,20 +87,27 @@ export default function KioskPage() {
     return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
   };
 
-  if (loading) return <div className="h-screen flex items-center justify-center"><Loader2 className="animate-spin" /></div>;
+  if (loading) return (
+    <div className="h-screen flex flex-col items-center justify-center bg-slate-900">
+      <Loader2 className="animate-spin text-blue-500 mb-4" size={40} />
+      <p className="text-slate-400 font-mono text-xs uppercase tracking-widest">Securing Connection...</p>
+    </div>
+  );
 
   if (!isFullScreen) {
     return (
       <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
-        <div className="max-w-md w-full bg-white rounded-2xl p-8 text-center shadow-2xl">
-          <AlertTriangle className="mx-auto text-amber-500 mb-4" size={48} />
-          <h1 className="text-2xl font-bold text-slate-900 mb-2">Examination Lockdown</h1>
-          <p className="text-slate-600 mb-6 text-sm leading-relaxed">
-            You are about to start the exam. The timer will begin once you enter fullscreen. 
-            Do not exit fullscreen or switch tabs until you submit.
+        <div className="max-w-md w-full bg-white rounded-3xl p-10 text-center shadow-2xl border border-slate-800">
+          <AlertTriangle className="mx-auto text-amber-500 mb-6" size={56} />
+          <h1 className="text-3xl font-black text-slate-900 mb-4 tracking-tight">Lockdown Mode</h1>
+          <p className="text-slate-500 mb-8 text-sm font-medium leading-relaxed">
+            You are entering a secure testing environment. Switching tabs or exiting fullscreen will result in an immediate submission. 
           </p>
-          <button onClick={enterFullScreen} className="w-full bg-blue-600 text-white font-bold py-3 rounded-xl hover:bg-blue-700 transition-all">
-            Enter Fullscreen & Start
+          <button 
+            onClick={enterFullScreen} 
+            className="w-full bg-blue-600 text-white font-black py-4 rounded-2xl hover:bg-blue-700 shadow-xl shadow-blue-100 transition-all active:scale-95"
+          >
+            Acknowledge & Start Exam
           </button>
         </div>
       </div>
@@ -111,64 +118,83 @@ export default function KioskPage() {
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col select-none">
-      <header className="bg-white border-b p-4 flex justify-between items-center px-8 sticky top-0 z-10 shadow-sm">
-        <div className="text-sm font-bold text-slate-500">
-          Question <span className="text-blue-600">{currentIdx + 1}</span> of {questions.length}
+      <header className="bg-white border-b p-5 flex justify-between items-center px-10 sticky top-0 z-10 shadow-sm">
+        <div className="flex flex-col">
+          <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Progress</span>
+          <div className="text-sm font-bold text-slate-900">
+            Question <span className="text-blue-600 font-black">{currentIdx + 1}</span> of {questions.length}
+          </div>
         </div>
-        <div className={`flex items-center gap-2 font-mono text-xl font-bold ${timeLeft < 300 ? 'text-red-600 animate-pulse' : 'text-slate-700'}`}>
+
+        <div className={`flex items-center gap-3 px-6 py-2 rounded-2xl bg-slate-50 border border-slate-100 font-mono text-2xl font-black ${timeLeft < 300 ? 'text-red-600 animate-pulse' : 'text-slate-900'}`}>
           <Clock size={24} /> {formatTime(timeLeft)}
         </div>
+
         <button 
-          onClick={() => { if(confirm("Are you sure you want to submit?")) handleSubmit() }}
+          onClick={() => { if(confirm("Submit all answers and end exam?")) handleSubmit() }}
           disabled={isSubmitting}
-          className="bg-green-600 text-white px-6 py-2 rounded-lg font-bold hover:bg-green-700 disabled:opacity-50"
+          className="bg-emerald-600 text-white px-8 py-3 rounded-xl font-black text-sm uppercase tracking-wide hover:bg-emerald-700 disabled:opacity-50 shadow-lg shadow-emerald-100"
         >
-          {isSubmitting ? "Submitting..." : "Submit Exam"}
+          {isSubmitting ? "Processing..." : "Finish Exam"}
         </button>
       </header>
 
-      <main className="flex-1 max-w-3xl mx-auto w-full py-12 px-4">
-        <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-200 min-h-[400px]">
-          <h2 className="text-xl font-semibold text-slate-800 mb-8 leading-snug">
+      <main className="flex-1 max-w-4xl mx-auto w-full py-16 px-6">
+        <div className="bg-white p-10 rounded-[2.5rem] shadow-sm border border-slate-200 min-h-[450px] flex flex-col justify-center">
+          <h2 className="text-2xl font-bold text-slate-900 mb-10 leading-tight">
             {q?.question_text}
           </h2>
 
-          <div className="space-y-3">
+          <div className="grid grid-cols-1 gap-4">
             {q?.options.map((option: string, idx: number) => (
               <label 
                 key={idx} 
-                className={`flex items-center gap-4 p-4 border-2 rounded-xl cursor-pointer transition-all ${answers[q.id] === idx ? 'border-blue-600 bg-blue-50' : 'border-slate-100 hover:border-slate-300'}`}
+                className={`flex items-center gap-5 p-6 border-2 rounded-2xl cursor-pointer transition-all ${answers[q.id] === idx ? 'border-blue-600 bg-blue-50/50 shadow-sm shadow-blue-50' : 'border-slate-100 hover:border-slate-200 bg-white'}`}
               >
                 <input 
                   type="radio" 
                   name={`q-${q.id}`} 
                   checked={answers[q.id] === idx}
                   onChange={() => setAnswers({...answers, [q.id]: idx})}
-                  className="w-5 h-5 text-blue-600" 
+                  className="w-6 h-6 text-blue-600 border-slate-300 focus:ring-blue-500" 
                 />
-                <span className="text-slate-700 font-medium">{option}</span>
+                <span className={`font-bold ${answers[q.id] === idx ? 'text-blue-900' : 'text-slate-600'}`}>{option}</span>
               </label>
             ))}
           </div>
         </div>
 
-        <div className="flex justify-between mt-8">
+        <div className="flex justify-between mt-10 px-4">
           <button 
             disabled={currentIdx === 0}
             onClick={() => setCurrentIdx(prev => prev - 1)}
-            className="px-6 py-2 font-bold text-slate-500 disabled:opacity-20 transition-all"
+            className="px-8 py-3 font-black text-slate-400 uppercase tracking-widest text-xs hover:text-slate-900 disabled:opacity-10 transition-all"
           >
             Previous
           </button>
           <button 
             disabled={currentIdx === questions.length - 1}
             onClick={() => setCurrentIdx(prev => prev + 1)}
-            className="bg-slate-900 text-white px-10 py-3 rounded-xl font-bold hover:bg-slate-800 disabled:opacity-20 transition-all"
+            className="bg-slate-900 text-white px-12 py-4 rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-blue-600 shadow-xl transition-all disabled:opacity-10"
           >
             Next Question
           </button>
         </div>
       </main>
     </div>
+  );
+}
+
+// 2. Wrap the logic in Suspense to fix the Vercel Build
+export default function KioskPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-900">
+        <Loader2 className="animate-spin text-blue-600 mb-4" size={40} />
+        <p className="text-slate-500 font-black uppercase tracking-[0.3em] text-[10px]">Initializing Secure Portal</p>
+      </div>
+    }>
+      <KioskContent />
+    </Suspense>
   );
 }
