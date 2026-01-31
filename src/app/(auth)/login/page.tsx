@@ -16,18 +16,18 @@ export default function LoginPage() {
     e.preventDefault();
     setLoading(true);
 
-    let loginEmail = identifier;
+    let loginEmail = identifier.trim();
 
-    // 1. Handle Index Number Login
-    if (!identifier.includes('@')) {
+    // 1. Handle Index Number Login (If no '@' is present)
+    if (!loginEmail.includes('@')) {
       const { data: profile, error: lookupError } = await supabase
         .from('profiles')
         .select('email')
-        .eq('index_number', identifier.trim())
+        .eq('index_number', loginEmail.toUpperCase()) // UDS Index numbers are usually uppercase
         .single();
 
       if (lookupError || !profile) {
-        alert("Invalid Index Number. Please use your registered email or check your ID.");
+        alert("No account found with this Index Number. Please register or use your email.");
         setLoading(false);
         return;
       }
@@ -36,7 +36,7 @@ export default function LoginPage() {
 
     // 2. Auth Execution
     const { data, error } = await supabase.auth.signInWithPassword({
-      email: loginEmail,
+      email: loginEmail.toLowerCase(),
       password,
     });
 

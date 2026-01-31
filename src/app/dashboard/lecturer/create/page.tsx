@@ -1,7 +1,7 @@
 "use client";
 import { useState, Suspense } from 'react';
 import DashboardLayout from '@/components/layout/DashboardLayout';
-import { MousePointer2, FileSpreadsheet, ArrowLeft, Save, Plus, Trash2, Info, Clock, Loader2 } from 'lucide-react';
+import { MousePointer2, FileSpreadsheet, ArrowLeft, Save, Plus, Trash2, Info, Clock, Loader2, BookOpen, Target } from 'lucide-react';
 import { Input } from '@/components/ui/Input';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
@@ -17,6 +17,8 @@ function CreateExamContent() {
   const [loading, setLoading] = useState(false);
   
   const [examTitle, setExamTitle] = useState('');
+  const [course, setCourse] = useState(''); // NEW: Course Name state
+  const [totalMarks, setTotalMarks] = useState(25); // NEW: Total Marks state
   const [duration, setDuration] = useState(45); 
   const [questions, setQuestions] = useState([
     { question_text: '', options: ['', '', '', ''], correct_index: 0 }
@@ -34,6 +36,7 @@ function CreateExamContent() {
 
   const handlePublish = async () => {
     if (!examTitle) return alert("Please enter an exam title.");
+    if (!course) return alert("Please enter the Course Name."); // New Validation
     if (questions.some(q => !q.question_text)) return alert("Please fill in all question texts.");
     if (!level) return alert("Level not detected. Please return to dashboard.");
 
@@ -47,9 +50,10 @@ function CreateExamContent() {
         .from('exams')
         .insert([{
           title: examTitle,
+          course: course, // NEW: Added to insert
           lecturer_id: user.id,
           level: level,
-          total_marks: 25,
+          total_marks: totalMarks, // NEW: Dynamic total marks
           duration_minutes: duration,
           is_active: true
         }])
@@ -63,7 +67,7 @@ function CreateExamContent() {
         question_text: q.question_text,
         options: q.options,
         correct_index: q.correct_index,
-        marks_per_question: 25 / questions.length
+        marks_per_question: totalMarks / questions.length // NEW: Calculated based on total marks
       }));
 
       const { error: qError } = await supabase
@@ -128,18 +132,18 @@ function CreateExamContent() {
               </div>
             </div>
             <div className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="md:col-span-2">
-                  <Input label="Exam Title" placeholder="Enter title before uploading" value={examTitle} onChange={(e) => setExamTitle(e.target.value)} />
-                </div>
-                <div>
-                  <Input label="Time (Mins)" type="number" value={duration} onChange={(e) => setDuration(parseInt(e.target.value))} />
-                </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Input label="Exam Title" placeholder="Mid-Sem Quiz" value={examTitle} onChange={(e) => setExamTitle(e.target.value)} />
+                <Input label="Course Name" placeholder="Intro to Computing" value={course} onChange={(e) => setCourse(e.target.value)} />
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Input label="Time (Mins)" type="number" value={duration} onChange={(e) => setDuration(parseInt(e.target.value))} />
+                <Input label="Total Marks" type="number" value={totalMarks} onChange={(e) => setTotalMarks(parseInt(e.target.value))} />
               </div>
               <div className="border-2 border-dashed border-slate-200 rounded-xl p-12 text-center hover:border-blue-400 transition-all">
                 <input type="file" accept=".xlsx, .xls, .csv" className="hidden" id="excel-upload" onChange={(e) => {
                   const file = e.target.files?.[0];
-                  if (!file || !examTitle) return alert("Please enter a title and select a file.");
+                  if (!file || !examTitle || !course) return alert("Please fill in Exam Title and Course Name before uploading.");
                   setLoading(true);
                   const reader = new FileReader();
                   reader.onload = (evt) => {
@@ -180,15 +184,30 @@ function CreateExamContent() {
             <Save size={18} /> {loading ? 'Publishing...' : 'Publish Exam'}
           </button>
         </div>
-        <div className="bg-white p-6 rounded-xl border border-slate-200 mb-8 shadow-sm grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="md:col-span-2">
-            <Input label="Exam Title" value={examTitle} onChange={(e) => setExamTitle(e.target.value)} />
+        
+        {/* NEW: Updated Config Header with Course and Marks */}
+        <div className="bg-white p-6 rounded-xl border border-slate-200 mb-8 shadow-sm space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="relative">
+               <Input label="Exam Title" value={examTitle} onChange={(e) => setExamTitle(e.target.value)} />
+            </div>
+            <div className="relative">
+               <Input label="Course Name" placeholder="e.g. BIS 102" value={course} onChange={(e) => setCourse(e.target.value)} />
+               <BookOpen className="absolute right-3 top-9 text-slate-400" size={18} />
+            </div>
           </div>
-          <div className="relative">
-            <Input label="Duration (Mins)" type="number" value={duration} onChange={(e) => setDuration(parseInt(e.target.value))} />
-            <Clock className="absolute right-3 top-9 text-slate-400" size={18} />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="relative">
+              <Input label="Duration (Mins)" type="number" value={duration} onChange={(e) => setDuration(parseInt(e.target.value))} />
+              <Clock className="absolute right-3 top-9 text-slate-400" size={18} />
+            </div>
+            <div className="relative">
+              <Input label="Total Marks" type="number" value={totalMarks} onChange={(e) => setTotalMarks(parseInt(e.target.value))} />
+              <Target className="absolute right-3 top-9 text-slate-400" size={18} />
+            </div>
           </div>
         </div>
+
         <div className="space-y-6">
           {questions.map((q, qIdx) => (
             <div key={qIdx} className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm relative">
