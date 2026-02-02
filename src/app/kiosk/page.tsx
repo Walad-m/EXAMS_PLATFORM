@@ -46,7 +46,7 @@ function KioskContent() {
     loadExam();
   }, [examId]);
 
-  // 2. Handle Submission
+  // 2. Handle Submission (Type-Safe Score Fix)
   const handleSubmit = useCallback(async (isAutoSubmit = false) => {
     if (isSubmitting) return;
     setIsSubmitting(true);
@@ -57,20 +57,24 @@ function KioskContent() {
     let totalScore = 0;
     questions.forEach((q) => {
       if (answers[q.id] === q.correctAnswerText) {
-        totalScore += parseFloat(q.marks_per_question);
+        // PRODUCTION FIX: Ensure marks are treated as Numbers, fallback to 0 if null
+        totalScore += Number(q.marks_per_question || 0);
       }
     });
 
     const { error } = await supabase.from('submissions').insert([{
       exam_id: examId,
       student_id: user.id,
-      score: totalScore.toFixed(2)
+      score: Number(totalScore.toFixed(2)) // Ensure score is sent as a numeric type
     }]);
 
     if (!error) {
       if (document.fullscreenElement) document.exitFullscreen();
       alert(isAutoSubmit ? "Session expired! Your exam has been auto-submitted." : `Exam Submitted! Score: ${totalScore.toFixed(2)}`);
       router.push('/dashboard/student/my-exams');
+    } else {
+      console.error("Submission Error:", error.message);
+      alert("Error saving submission. Please alert your lecturer.");
     }
     setIsSubmitting(false);
   }, [answers, examId, questions, router, isSubmitting]);
@@ -81,12 +85,10 @@ function KioskContent() {
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
     if (warningRef.current) clearTimeout(warningRef.current);
     
-    // Set Warning Timer (at 4 mins)
     warningRef.current = setTimeout(() => {
       if (isFullScreen) setShowInactivityWarning(true);
     }, WARNING_TIME);
 
-    // Set Logout Timer (at 5 mins)
     timeoutRef.current = setTimeout(() => {
       if (isFullScreen) handleSubmit(true);
     }, INACTIVITY_LIMIT);
@@ -144,9 +146,10 @@ function KioskContent() {
     );
   }
 
+  const q = questions[currentIdx];
+
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col select-none relative">
-      {/* 5. INACTIVITY WARNING POPUP */}
       {showInactivityWarning && (
         <div className="fixed inset-0 z-[100] bg-slate-900/80 flex items-center justify-center p-4 backdrop-blur-sm">
           <div className="bg-white rounded-3xl p-8 max-w-sm w-full text-center shadow-2xl animate-in zoom-in-95 duration-300">
@@ -172,12 +175,12 @@ function KioskContent() {
       </header>
 
       <main className="flex-1 max-w-4xl mx-auto w-full py-16 px-6">
-        <div className="bg-white p-10 rounded-[2.5rem] shadow-sm border border-slate-200 min-h-[400px]">
-          <h2 className="text-2xl font-bold text-slate-900 mb-10 leading-tight">{questions[currentIdx]?.question_text}</h2>
+        <div className="bg-white p-10 rounded-[2.5rem] shadow-sm border border-slate-200 min-h-[400px] flex flex-col justify-center">
+          <h2 className="text-2xl font-bold text-slate-900 mb-10 leading-tight">{q?.question_text}</h2>
           <div className="grid grid-cols-1 gap-4">
-            {questions[currentIdx]?.options.map((option: string, idx: number) => (
-              <label key={idx} className={`flex items-center gap-5 p-6 border-2 rounded-2xl cursor-pointer transition-all ${answers[questions[currentIdx].id] === option ? 'border-blue-600 bg-blue-50/50' : 'border-slate-100 bg-white'}`}>
-                <input type="radio" name={`q-${questions[currentIdx].id}`} checked={answers[questions[currentIdx].id] === option} onChange={() => setAnswers({...answers, [questions[currentIdx].id]: option})} className="w-6 h-6 text-blue-600" />
+            {q?.options.map((option: string, idx: number) => (
+              <label key={idx} className={`flex items-center gap-5 p-6 border-2 rounded-2xl cursor-pointer transition-all ${answers[q.id] === option ? 'border-blue-600 bg-blue-50/50 shadow-sm' : 'border-slate-100 bg-white'}`}>
+                <input type="radio" name={`q-${q.id}`} checked={answers[q.id] === option} onChange={() => setAnswers({...answers, [q.id]: option})} className="w-6 h-6 text-blue-600" />
                 <span className="font-bold text-slate-700">{option}</span>
               </label>
             ))}
