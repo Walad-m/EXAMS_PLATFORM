@@ -3,9 +3,8 @@ import { useEffect, useState, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { supabase } from '@/lib/supabase/client';
-import { ArrowLeft, FileSpreadsheet, Search, Loader2, BarChart3, TrendingUp, Users, BookOpen } from 'lucide-react';
+import { ArrowLeft, FileSpreadsheet, Search, Loader2, BookOpen } from 'lucide-react';
 
-// 1. This component holds all the results logic grouped by Course
 function ResultsContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -21,6 +20,7 @@ function ResultsContent() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user || !level) return;
 
+      // PRODUCTION FIX: Ensure we filter by lecturer_id so lecturers only see their own data
       const { data, error } = await supabase
         .from('submissions')
         .select(`
@@ -32,21 +32,27 @@ function ResultsContent() {
             title,
             course,
             level,
-            total_marks
+            total_marks,
+            lecturer_id
           )
         `)
-        .eq('exams.level', parseInt(level, 10))
+        .eq('exams.level', level) // Use the string level from DB
+        .eq('exams.lecturer_id', user.id) // SECURITY: Only this lecturer's exams
         .order('submitted_at', { ascending: false });
 
-      if (error) console.error("Query Error:", error.message);
-      else setResults(data || []);
+      if (error) {
+        console.error("Query Error:", error.message);
+      } else {
+        setResults(data || []);
+      }
       setLoading(false);
     }
     fetchResults();
   }, [level]);
 
-  // Group results by Exam ID to create separate "Course Containers"
+  // Grouping logic with defensive checks for production stability
   const groupedResults = results.reduce((acc: any, curr: any) => {
+    if (!curr.exams) return acc; // Skip if exam data is missing
     const examId = curr.exams.id;
     if (!acc[examId]) {
       acc[examId] = {
@@ -58,11 +64,11 @@ function ResultsContent() {
     return acc;
   }, {});
 
-  // EXPORT LOGIC: Strictly Index Number and Score only
   const exportToExcel = (examId: string) => {
     const group = groupedResults[examId];
+    if (!group) return;
+
     const headers = ["Index Number", "Score"];
-    
     const rows = group.submissions.map((res: any) => [
       res.profiles?.index_number || "N/A",
       res.score
@@ -73,7 +79,7 @@ function ResultsContent() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `${group.details.course}_Level_${level}_Results.csv`;
+    link.download = `${group.details.course || 'Results'}_Level_${level}.csv`;
     link.click();
   };
 
@@ -110,7 +116,6 @@ function ResultsContent() {
 
             return (
               <div key={group.details.id} className="mb-12 bg-white rounded-[2.5rem] border border-slate-200 shadow-sm overflow-hidden">
-                {/* Course Container Header */}
                 <div className="p-8 border-b border-slate-100 bg-slate-50/30 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                   <div>
                     <div className="flex items-center gap-2 mb-1">
@@ -122,13 +127,12 @@ function ResultsContent() {
                   
                   <button 
                     onClick={() => exportToExcel(group.details.id)}
-                    className="flex items-center gap-2 bg-emerald-600 text-white px-6 py-3 rounded-2xl font-bold text-sm hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-100 active:scale-95"
+                    className="flex items-center gap-2 bg-emerald-600 text-white px-6 py-3 rounded-2xl font-bold text-sm hover:bg-emerald-700 transition-all shadow-lg active:scale-95"
                   >
                     <FileSpreadsheet size={18} /> Export Index & Scores
                   </button>
                 </div>
 
-                {/* Submissions Table */}
                 <div className="overflow-x-auto">
                   <table className="w-full text-left">
                     <thead>

@@ -14,12 +14,15 @@ export default function MyExamsPage() {
     async function fetchMyResults() {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
+        // PRODUCTION FIX: We fetch the exams data. 
+        // Note: If 'rel_submission_to_exam' causes an error, 
+        // change it to just 'exams' to match standard Supabase relations.
         const { data, error } = await supabase
           .from('submissions')
           .select(`
             score,
             submitted_at,
-            exams!rel_submission_to_exam (
+            exams (
               id,
               title,
               course,
@@ -31,6 +34,12 @@ export default function MyExamsPage() {
 
         if (error) {
           console.error("Student Results Query Error:", error.message);
+          // Fallback: Try fetching without the specific constraint name if the first one fails
+          const { data: retryData } = await supabase
+            .from('submissions')
+            .select('score, submitted_at, exams(id, title, course, total_marks)')
+            .eq('student_id', user.id);
+          if (retryData) setSubmissions(retryData);
         } else {
           setSubmissions(data || []);
         }
@@ -42,6 +51,7 @@ export default function MyExamsPage() {
 
   // Group Submissions by Course Name
   const groupedSubmissions = submissions.reduce((acc: any, sub: any) => {
+    // Defensive check: handle cases where exams might be null
     const courseName = sub.exams?.course || 'General Courses';
     if (!acc[courseName]) acc[courseName] = [];
     acc[courseName].push(sub);
@@ -65,7 +75,6 @@ export default function MyExamsPage() {
           ) : Object.keys(groupedSubmissions).length > 0 ? (
             Object.entries(groupedSubmissions).map(([courseName, courseSubs]: [string, any]) => (
               <div key={courseName} className="space-y-4">
-                {/* Course Container Header */}
                 <div className="flex items-center gap-3 px-2">
                   <BookOpen size={20} className="text-blue-600" />
                   <h3 className="font-black text-slate-800 uppercase tracking-tighter text-lg">
@@ -82,7 +91,9 @@ export default function MyExamsPage() {
                           <CheckCircle size={28} />
                         </div>
                         <div>
-                          <h4 className="font-bold text-slate-900 text-lg leading-tight">{sub.exams?.title}</h4>
+                          <h4 className="font-bold text-slate-900 text-lg leading-tight">
+                            {sub.exams?.title || "Unknown Exam"}
+                          </h4>
                           <div className="flex items-center gap-4 text-[10px] text-slate-400 mt-2 font-black uppercase tracking-widest">
                             <span className="flex items-center gap-1.5">
                               <Calendar size={14} className="text-slate-300"/> 
@@ -99,13 +110,14 @@ export default function MyExamsPage() {
                         <div className="text-left sm:text-right">
                           <p className="text-[10px] uppercase font-black text-slate-300 tracking-[0.2em] mb-1">Earned Marks</p>
                           <p className="text-2xl font-black text-blue-600 tabular-nums">
-                            {sub.score} <span className="text-slate-200 text-sm font-normal">/ {sub.exams?.total_marks}</span>
+                            {sub.score} <span className="text-slate-200 text-sm font-normal">/ {sub.exams?.total_marks || '??'}</span>
                           </p>
                         </div>
                         
                         <button 
                           onClick={() => router.push(`/dashboard/student/review?id=${sub.exams?.id}`)}
-                          className="flex items-center gap-2 bg-slate-900 text-white px-6 py-3 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-blue-600 transition-all shadow-lg active:scale-95"
+                          disabled={!sub.exams?.id}
+                          className="flex items-center gap-2 bg-slate-900 text-white px-6 py-3 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-blue-600 transition-all shadow-lg active:scale-95 disabled:opacity-50"
                         >
                           <FileSearch size={16} /> Review Paper
                         </button>
