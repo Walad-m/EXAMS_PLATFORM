@@ -98,7 +98,7 @@ function ResultsContent() {
               placeholder="Filter by student..." 
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-12 pr-4 py-2.5 border border-slate-200 rounded-2xl text-sm focus:ring-4 focus:ring-blue-500/10 outline-none transition-all"
+              className="w-full pl-12 pr-4 py-2.5 border border-slate-200 text-gray-600 rounded-2xl text-sm focus:ring-4 focus:ring-blue-500/10 outline-none transition-all"
             />
           </div>
         </div>
