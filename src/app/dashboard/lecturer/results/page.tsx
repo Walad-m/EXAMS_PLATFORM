@@ -146,8 +146,8 @@ function ResultsContent() {
                       {filteredSubmissions.map((res: any, idx: number) => (
                         <tr key={idx} className="hover:bg-blue-50/30 transition-all group">
                           <td className="px-10 py-5">
-                            <div className="font-bold text-slate-900 group-hover:text-blue-600 transition-colors uppercase tracking-tight">{res.profiles?.full_name}</div>
-                            <div className="text-xs font-mono text-slate-400">{res.profiles?.index_number}</div>
+                            <div className="font-bold text-slate-900 group-hover:text-blue-600 transition-colors uppercase tracking-tight">{res.profiles?.index_number}</div>
+                            <div className="text-xs font-mono text-slate-400">{}</div>
                           </td>
                           <td className="px-10 py-5 text-center">
                             <div className="inline-flex items-baseline gap-1 bg-slate-100 px-4 py-1.5 rounded-full font-black text-slate-700">
