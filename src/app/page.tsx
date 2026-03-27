@@ -11,7 +11,7 @@ export default function LandingPage() {
           <div className="bg-blue-600 p-2 rounded-lg text-white">
             <GraduationCap size={24} />
           </div>
-          <span className="font-black text-xl tracking-tight text-slate-900">BIS <span className="text-blue-600">EXAMS PLATFORM</span></span>
+          <span className="font-black text-xl tracking-tight text-slate-900"> <span className="text-blue-600">EXAMS PLATFORM</span></span>
         </div>
         <Link 
           href="/login" 
