@@ -2,7 +2,7 @@
 import { useEffect, useState, useCallback, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
-import { Clock, Loader2, ShieldAlert } from 'lucide-react';
+import { Clock, Loader2 } from 'lucide-react';
 
 function KioskContent() {
   const searchParams = useSearchParams();
@@ -10,12 +10,13 @@ function KioskContent() {
   const examId = searchParams.get('id');
 
   const [loading, setLoading] = useState(true);
-  const [isFullScreen, setIsFullScreen] = useState(false);
   const [questions, setQuestions] = useState<any[]>([]);
   const [currentIdx, setCurrentIdx] = useState(0);
   const [answers, setAnswers] = useState<{ [key: string]: string }>({});
-  const [timeLeft, setTimeLeft] = useState(0); 
+  const [timeLeft, setTimeLeft] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const examReady = !loading && questions.length > 0;
 
   // 1. Fetch & Shuffle Logic
   useEffect(() => {
@@ -44,12 +45,14 @@ function KioskContent() {
     setIsSubmitting(true);
 
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
+    if (!user) {
+      setIsSubmitting(false);
+      return;
+    }
 
     let totalScore = 0;
     questions.forEach((q) => {
       if (answers[q.id] === q.correctAnswerText) {
-        // PRODUCTION FIX: Ensure marks are treated as Numbers, fallback to 0 if null
         totalScore += Number(q.marks_per_question || 0);
       }
     });
@@ -57,12 +60,18 @@ function KioskContent() {
     const { error } = await supabase.from('submissions').insert([{
       exam_id: examId,
       student_id: user.id,
-      score: Number(totalScore.toFixed(2)) // Ensure score is sent as a numeric type
+      score: Number(totalScore.toFixed(2))
     }]);
 
     if (!error) {
-      if (document.fullscreenElement) document.exitFullscreen();
-      alert(isAutoSubmit ? "Session expired! Your exam has been auto-submitted." : `Exam Submitted! Score: ${totalScore.toFixed(2)}`);
+      try {
+        if (document.fullscreenElement && document.exitFullscreen) {
+          await document.exitFullscreen();
+        }
+      } catch {
+        /* iOS / unsupported fullscreen */
+      }
+      alert(isAutoSubmit ? "Time is up. Your exam was submitted automatically." : `Exam Submitted! Score: ${totalScore.toFixed(2)}`);
       router.push('/dashboard/student/my-exams');
     } else {
       console.error("Submission Error:", error.message);
@@ -71,22 +80,15 @@ function KioskContent() {
     setIsSubmitting(false);
   }, [answers, examId, questions, router, isSubmitting]);
 
-  // 3. Exam duration timer
+  // 3. Exam duration timer (no fullscreen gate — works reliably on iPhone)
   useEffect(() => {
-    if (!isFullScreen || timeLeft <= 0) {
-      if (isFullScreen && timeLeft === 0) handleSubmit(true);
+    if (!examReady || timeLeft <= 0) {
+      if (examReady && timeLeft === 0) handleSubmit(true);
       return;
     }
     const timer = setInterval(() => setTimeLeft(prev => prev - 1), 1000);
     return () => clearInterval(timer);
-  }, [timeLeft, isFullScreen, handleSubmit]);
-
-  const enterFullScreen = () => {
-    const elem = document.documentElement;
-    if (elem.requestFullscreen) {
-      elem.requestFullscreen().then(() => setIsFullScreen(true));
-    }
-  };
+  }, [timeLeft, examReady, handleSubmit]);
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -94,17 +96,18 @@ function KioskContent() {
     return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
   };
 
-  if (loading) return <div className="h-screen flex items-center justify-center bg-slate-900"><Loader2 className="animate-spin text-blue-500" /></div>;
-
-  if (!isFullScreen) {
+  if (loading) {
     return (
-      <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
-        <div className="max-w-md w-full bg-white rounded-3xl p-10 text-center shadow-2xl">
-          <ShieldAlert className="mx-auto text-blue-600 mb-6" size={56} />
-          <h1 className="text-3xl font-black text-slate-900 mb-4">Lockdown</h1>
-          <p className="text-slate-500 mb-8 text-sm font-medium">Full screen helps you focus during the exam.</p>
-          <button onClick={enterFullScreen} className="w-full bg-blue-600 text-white font-black py-4 rounded-2xl hover:bg-blue-700 transition-all">Start Exam</button>
-        </div>
+      <div className="h-screen flex items-center justify-center bg-slate-900">
+        <Loader2 className="animate-spin text-blue-500" />
+      </div>
+    );
+  }
+
+  if (!questions.length) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 p-6 text-center text-slate-600 font-medium">
+        This exam could not be loaded. Check the link or try again from your exam list.
       </div>
     );
   }
@@ -112,28 +115,61 @@ function KioskContent() {
   const q = questions[currentIdx];
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col select-none relative">
-      <header className="bg-white border-b p-5 flex justify-between items-center px-10 sticky top-0 z-10 shadow-sm">
-        <div className="text-sm font-bold text-slate-900">Question <span className="text-blue-600">{currentIdx + 1}</span> of {questions.length}</div>
-        <div className={`font-mono text-2xl font-black ${timeLeft < 300 ? 'text-red-600 animate-pulse' : 'text-slate-900'}`}><Clock className="inline mr-2" /> {formatTime(timeLeft)}</div>
-        <button onClick={() => { if(confirm("Submit exam?")) handleSubmit() }} className="bg-emerald-600 text-white px-8 py-3 rounded-xl font-black text-sm hover:bg-emerald-700">Finish</button>
+    <div className="min-h-screen bg-slate-50 flex flex-col relative">
+      <header className="bg-white border-b p-4 sm:p-5 flex flex-wrap justify-between items-center gap-3 px-4 sm:px-10 sticky top-0 z-10 shadow-sm">
+        <div className="text-sm font-bold text-slate-900">
+          Question <span className="text-blue-600">{currentIdx + 1}</span> of {questions.length}
+        </div>
+        <div className={`font-mono text-xl sm:text-2xl font-black ${timeLeft < 300 ? 'text-red-600 animate-pulse' : 'text-slate-900'}`}>
+          <Clock className="inline mr-2" /> {formatTime(timeLeft)}
+        </div>
+        <button
+          type="button"
+          onClick={() => { if (confirm("Submit exam?")) handleSubmit(); }}
+          className="bg-emerald-600 text-white px-6 sm:px-8 py-2.5 sm:py-3 rounded-xl font-black text-sm hover:bg-emerald-700"
+        >
+          Finish
+        </button>
       </header>
 
-      <main className="flex-1 max-w-4xl mx-auto w-full py-16 px-6">
-        <div className="bg-white p-10 rounded-[2.5rem] shadow-sm border border-slate-200 min-h-[400px] flex flex-col justify-center">
-          <h2 className="text-2xl font-bold text-slate-900 mb-10 leading-tight">{q?.question_text}</h2>
+      <main className="flex-1 max-w-4xl mx-auto w-full py-8 sm:py-16 px-4 sm:px-6">
+        <div className="bg-white p-6 sm:p-10 rounded-[2.5rem] shadow-sm border border-slate-200 min-h-[280px] sm:min-h-[400px] flex flex-col justify-center">
+          <h2 className="text-xl sm:text-2xl font-bold text-slate-900 mb-8 sm:mb-10 leading-tight">{q?.question_text}</h2>
           <div className="grid grid-cols-1 gap-4">
             {q?.options.map((option: string, idx: number) => (
-              <label key={idx} className={`flex items-center gap-5 p-6 border-2 rounded-2xl cursor-pointer transition-all ${answers[q.id] === option ? 'border-blue-600 bg-blue-50/50 shadow-sm' : 'border-slate-100 bg-white'}`}>
-                <input type="radio" name={`q-${q.id}`} checked={answers[q.id] === option} onChange={() => setAnswers({...answers, [q.id]: option})} className="w-6 h-6 text-blue-600" />
-                <span className="font-bold text-slate-700">{option}</span>
+              <label
+                key={idx}
+                className={`flex items-center gap-4 sm:gap-5 p-4 sm:p-6 border-2 rounded-2xl cursor-pointer transition-all ${answers[q.id] === option ? 'border-blue-600 bg-blue-50/50 shadow-sm' : 'border-slate-100 bg-white'}`}
+              >
+                <input
+                  type="radio"
+                  name={`q-${q.id}`}
+                  checked={answers[q.id] === option}
+                  onChange={() => setAnswers({ ...answers, [q.id]: option })}
+                  className="w-5 h-5 sm:w-6 sm:h-6 text-blue-600 shrink-0"
+                />
+                <span className="font-bold text-slate-700 text-sm sm:text-base">{option}</span>
               </label>
             ))}
           </div>
         </div>
-        <div className="flex justify-between mt-10 px-4">
-          <button disabled={currentIdx === 0} onClick={() => setCurrentIdx(prev => prev - 1)} className="px-8 py-3 font-black text-slate-400 text-xs uppercase tracking-widest disabled:opacity-10">Previous</button>
-          <button disabled={currentIdx === questions.length - 1} onClick={() => setCurrentIdx(prev => prev + 1)} className="bg-slate-900 text-white px-12 py-4 rounded-2xl font-black uppercase text-xs tracking-widest hover:bg-blue-600 shadow-xl transition-all">Next</button>
+        <div className="flex justify-between mt-8 sm:mt-10 px-1 sm:px-4">
+          <button
+            type="button"
+            disabled={currentIdx === 0}
+            onClick={() => setCurrentIdx(prev => prev - 1)}
+            className="px-4 sm:px-8 py-3 font-black text-slate-400 text-xs uppercase tracking-widest disabled:opacity-10"
+          >
+            Previous
+          </button>
+          <button
+            type="button"
+            disabled={currentIdx === questions.length - 1}
+            onClick={() => setCurrentIdx(prev => prev + 1)}
+            className="bg-slate-900 text-white px-8 sm:px-12 py-3 sm:py-4 rounded-2xl font-black uppercase text-xs tracking-widest hover:bg-blue-600 shadow-xl transition-all"
+          >
+            Next
+          </button>
         </div>
       </main>
     </div>
